@@ -15,10 +15,11 @@ jobs:
       - name: Run Freqtrade backtest
         run: |
           docker run --rm \
+            --entrypoint /bin/bash \
             -v "${{ github.workspace }}/user_data:/freqtrade/user_data" \
             -v "${{ github.workspace }}/run_backtest.sh:/freqtrade/run_backtest.sh:ro" \
             freqtradeorg/freqtrade:stable \
-            bash /freqtrade/run_backtest.sh
+            /freqtrade/run_backtest.sh
 
       - name: Save backtest results
         if: always()
