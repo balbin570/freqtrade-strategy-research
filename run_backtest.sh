@@ -1,14 +1,23 @@
 #!/bin/bash
 set -e
 
-freqtrade download-data \
-  --config user_data/config.json \
-  --timeframes 5m 15m \
-  --timerange 20250101-20261001
+echo "BINANCE VISION CONNECTION TEST"
 
-freqtrade backtesting \
-  --config user_data/config.json \
-  --strategy-list Strategy001 Strategy002 Strategy003 \
-  --timeframe 5m \
-  --timerange 20260101-20261001 \
-  --export trades
+python - <<'PY'
+import urllib.request
+
+url = (
+    "https://data.binance.vision/data/spot/monthly/klines/"
+    "BTCUSDT/5m/BTCUSDT-5m-2026-09.zip"
+)
+
+try:
+    with urllib.request.urlopen(url, timeout=30) as response:
+        print("HTTP STATUS:", response.status)
+        print("CONTENT TYPE:", response.headers.get("Content-Type"))
+        print("BINANCE VISION ACCESS: OK")
+except Exception as exc:
+    print("BINANCE VISION ACCESS: FAILED")
+    print(str(exc))
+    raise
+PY
