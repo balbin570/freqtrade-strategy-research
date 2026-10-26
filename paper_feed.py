@@ -4,6 +4,8 @@ Deploy with: uvicorn paper_feed:app --host 0.0.0.0 --port $PORT
 import asyncio
 import json
 import os
+import urllib.request
+import urllib.error
 from collections import deque
 from datetime import datetime, timezone
 
@@ -16,6 +18,30 @@ STREAM_URL = "wss://data-stream.binance.vision/stream?streams=" + "/".join(f"{s}
 CANDLES = {s.upper(): deque(maxlen=300) for s in SYMBOLS}
 STATE = {"status": "STARTING", "connected": False, "last_event_utc": None, "last_error": None, "messages": 0, "closed_candles": 0, "reconnects": 0}
 _task = None
+TELEGRAM = {"status": "NOT_TESTED", "detail": None}
+
+def telegram_send_sync():
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        return "MISSING_CONFIG", "Environment variables missing"
+    payload = json.dumps({"chat_id": chat_id, "text": "✅ Freqtrade Paper Bot: Render Telegram bağlantısı başarılı. PAPER ONLY — gerçek emir yok."}).encode("utf-8")
+    request = urllib.request.Request(
+        "https://api.telegram.org/bot" + token + "/sendMessage",
+        data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            body = json.loads(response.read().decode("utf-8"))
+            return ("SENT", "Telegram accepted message") if body.get("ok") else ("ERROR", "Telegram rejected message")
+    except urllib.error.HTTPError as exc:
+        return "ERROR", "Telegram HTTP " + str(exc.code)
+    except Exception as exc:
+        return "ERROR", type(exc).__name__
+
+async def telegram_test():
+    result, detail = await asyncio.to_thread(telegram_send_sync)
+    TELEGRAM.update(status=result, detail=detail)
+
 
 async def collector():
     delay = 2
@@ -62,6 +88,7 @@ async def collector():
 async def startup():
     global _task
     _task = asyncio.create_task(collector())
+    asyncio.create_task(telegram_test())
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -83,5 +110,6 @@ def status():
             "timeframe": "5m", "symbols": {s: {"closed_candles": len(v),
             "last_close": v[-1]["close"] if v else None,
             "last_candle_ms": v[-1]["close_time_ms"] if v else None} for s, v in CANDLES.items()},
+            "telegram": TELEGRAM,
             "note": "This phase only collects closed candles; no strategies or virtual positions yet."
             }
