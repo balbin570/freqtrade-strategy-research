@@ -2,38 +2,68 @@ import urllib.request
 import zipfile
 import io
 import csv
-from datetime import datetime, timezone
+import json
+from pathlib import Path
 
-symbol = "BTCUSDT"
-timeframe = "5m"
-month = "2026-09"
+symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+timeframes = ["5m", "15m"]
+months = ["2026-08", "2026-09"]
 
-url = (
-    f"https://data.binance.vision/data/spot/monthly/klines/"
-    f"{symbol}/{timeframe}/{symbol}-{timeframe}-{month}.zip"
-)
+output_dir = Path("user_data/data/binance")
+output_dir.mkdir(parents=True, exist_ok=True)
 
-print("Downloading:", url)
+for symbol in symbols:
+    for timeframe in timeframes:
+        candles = []
 
-with urllib.request.urlopen(url, timeout=60) as response:
-    data = response.read()
+        for month in months:
+            url = (
+                "https://data.binance.vision/data/spot/monthly/klines/"
+                f"{symbol}/{timeframe}/{symbol}-{timeframe}-{month}.zip"
+            )
 
-with zipfile.ZipFile(io.BytesIO(data)) as archive:
-    filename = archive.namelist()[0]
-    with archive.open(filename) as file:
-        rows = list(csv.reader(io.TextIOWrapper(file)))
+            print("Downloading:", url)
 
-# Binance Vision microsecond timestamps -> milliseconds
-for row in rows:
-    timestamp = int(row[0])
-    if timestamp >= 10**15:
-        timestamp //= 1000
-    row[0] = timestamp
+            with urllib.request.urlopen(url, timeout=60) as response:
+                archive_bytes = response.read()
 
-first_date = datetime.fromtimestamp(rows[0][0] / 1000, tz=timezone.utc)
-last_date = datetime.fromtimestamp(rows[-1][0] / 1000, tz=timezone.utc)
+            with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+                with archive.open(archive.namelist()[0]) as file:
+                    rows = csv.reader(io.TextIOWrapper(file))
 
-print("Candles downloaded:", len(rows))
-print("First candle UTC:", first_date.isoformat())
-print("Last candle UTC:", last_date.isoformat())
-print("TIMESTAMP CONVERSION: OK")
+                    for row in rows:
+                        timestamp = int(row[0])
+
+                        if timestamp >= 10**15:
+                            timestamp //= 1000
+
+                        candles.append([
+                            timestamp,
+                            float(row[1]),
+                            float(row[2]),
+                            float(row[3]),
+                            float(row[4]),
+                            float(row[5])
+                        ])
+
+        candles.sort(key=lambda candle: candle[0])
+
+        # Remove duplicate timestamps.
+        unique = {candle[0]: candle for candle in candles}
+        candles = [unique[key] for key in sorted(unique)]
+
+        filename = (
+            output_dir / f"{symbol[:-4]}_USDT-{timeframe}.json"
+        )
+
+        with open(filename, "w", encoding="utf-8") as file:
+            json.dump(candles, file, separators=(",", ":"))
+
+        print(
+            "SAVED:",
+            filename,
+            "CANDLES:",
+            len(candles)
+        )
+
+print("ALL DATA CONVERTED")
