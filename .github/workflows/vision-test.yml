@@ -11,5 +11,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download and inspect Binance candles
+      - name: Download and convert Binance candles
         run: python download_vision.py
+
+      - name: Save historical data
+        uses: actions/upload-artifact@v4
+        with:
+          name: binance-historical-data
+          path: user_data/data/binance/
+          if-no-files-found: error
+          retention-days: 30
