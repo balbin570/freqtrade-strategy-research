@@ -3,7 +3,7 @@
   "dry_run_wallet": 1000,
   "stake_currency": "USDT",
   "stake_amount": 100,
-  "max_open_trades": 3,
+  "max_open_trades": 5,
   "timeframe": "5m",
   "trading_mode": "spot",
   "exchange": {
