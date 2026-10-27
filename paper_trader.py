@@ -461,14 +461,15 @@ async def market_loop():
 @app.on_event("startup")
 async def startup():
     load_state()
-    # The status is sent once on boot; missing Telegram settings do not stop market data.
+
     asyncio.create_task(asyncio.to_thread(
         send_telegram_sync,
-        "âœ… Freqtrade sanal iÅŸlem motoru baÅŸlatÄ±ldÄ±.\n"
+        "\u2705 Freqtrade sanal i\u015flem motoru ba\u015flat\u0131ld\u0131.\n"
         "Strategy001/002/003 | BTC/ETH/SOL | 5m\n"
-        "Her strateji: 1.000 USDT; iÅŸlem tutarÄ±: 100 USDT; en fazla 5 aÃ§Ä±k pozisyon.\n"
-        "YalnÄ±zca sanal iÅŸlem â€” gerÃ§ek emir gÃ¶nderilmez."
+        "Her strateji: 1.000 USDT; i\u015flem tutar\u0131: 100 USDT; en fazla 5 a\u00e7\u0131k pozisyon.\n"
+        "Yaln\u0131zca sanal i\u015flem \u2014 ger\u00e7ek emir g\u00f6nderilmez."
     ))
+
     asyncio.create_task(bootstrap_market())
 
 
