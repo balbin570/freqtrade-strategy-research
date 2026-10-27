@@ -610,5 +610,5 @@ async def db_test():
     except Exception as exc:
         return {
             "database_connected": False,
-            "error_type": type(exc).__name__
-        }
+            "error_type": type(exc).__name__,
+            "error_detail": str(exc).split("password")[0][:250]
