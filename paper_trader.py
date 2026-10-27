@@ -529,12 +529,33 @@ async def telegram_test():
 
 @app.get("/daily")
 async def daily():
-    lines = ["ğŸ“Š GÃœNLÃœK SANAL Ä°ÅLEM Ã–ZETÄ°"]
+    lines = [
+        "\U0001F4CA G\u00dcNL\u00dcK SANAL \u0130\u015eLEM \u00d6ZET\u0130"
+    ]
+
     for name, p in state["strategies"].items():
-        lines.append(f"{name}: gerÃ§ekleÅŸen kÃ¢r/zarar {p['realized_pnl']:+.2f} USDT, aÃ§Ä±k {len(p['positions'])}/{MAX_OPEN}, kapanan {len(p['trades'])}")
-    lines.append("SADECE SANAL Ä°ÅLEM â€” gerÃ§ek emir gÃ¶nderilmez")
-    ok = await asyncio.to_thread(send_telegram_sync, "\n".join(lines))
-    return {"ok": ok, "telegram": state["telegram"], "summary": lines}
+        lines.append(
+            f"{name}: ger\u00e7ekle\u015fen k\u00e2r/zarar "
+            f"{p['realized_pnl']:+.2f} USDT, "
+            f"a\u00e7\u0131k {len(p['positions'])}/{MAX_OPEN}, "
+            f"kapanan {len(p['trades'])}"
+        )
+
+    lines.append(
+        "SADECE SANAL \u0130\u015eLEM \u2014 "
+        "ger\u00e7ek emir g\u00f6nderilmez"
+    )
+
+    ok = await asyncio.to_thread(
+        send_telegram_sync,
+        "\n".join(lines)
+    )
+
+    return {
+        "ok": ok,
+        "telegram": state["telegram"],
+        "summary": lines
+    }
 
 
 @app.get("/trades/{strategy}")
