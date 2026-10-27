@@ -608,6 +608,7 @@ async def db_test():
             "table_exists": table_exists
         }
     except Exception as exc:
+        print("SUPABASE_CONNECTION_ERROR:", repr(exc), flush=True)
         return {
             "database_connected": False,
             "error_type": type(exc).__name__
