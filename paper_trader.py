@@ -519,7 +519,10 @@ async def status():
 
 @app.get("/telegram-test")
 async def telegram_test():
-        ok = await asyncio.to_thread(send_telegram_sync, "\u2705 Telegram T\u00fcrk\u00e7e karakter testi: \u00e7 \u011f \u0131 \u0130 \u00f6 \u015f \u00fc \u2014 yaln\u0131zca sanal i\u015flem.")
+    ok = await asyncio.to_thread(
+        send_telegram_sync,
+        "\u2705 Telegram T\u00fcrk\u00e7e karakter testi: \u00e7 \u011f \u0131 \u0130 \u00f6 \u015f \u00fc"
+    )
     return {"ok": ok, "telegram": state["telegram"]}
 
 
