@@ -366,9 +366,16 @@ async def process_closed_candle(symbol, candle):
                         "qty": qty, "entry_cost": entry_cost
                     }
                     portfolio["positions"].append(pos)
-                    msg = (f"ğŸŸ¢ {strategy} SANAL ALIÅ\n{symbol}\nFiyat: {price:.8g}\n"
-                           f"Tutar: {STAKE:.2f} USDT | AÃ§Ä±k pozisyon: {len(portfolio['positions'])}/{MAX_OPEN}\n"
-                           "SADECE SANAL Ä°ÅLEM â€” gerÃ§ek emir gÃ¶nderilmez")
+                    msg = (
+                        f"\U0001F7E2 {strategy} SANAL ALI\u015e\n"
+                        f"{symbol}\n"
+                        f"Fiyat: {price:.8g}\n"
+                        f"Tutar: {STAKE:.2f} USDT | "
+                        f"A\u00e7\u0131k pozisyon: "
+                        f"{len(portfolio['positions'])}/{MAX_OPEN}\n"
+                        "SADECE SANAL \u0130\u015eLEM \u2014 "
+                        "ger\u00e7ek emir g\u00f6nderilmez"
+                    )
                     asyncio.create_task(asyncio.to_thread(send_telegram_sync, msg))
         save_state()
 
