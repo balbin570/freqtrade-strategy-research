@@ -2,6 +2,7 @@ import asyncio
 import json
 import math
 import psycopg2
+from psycopg2.extras import Json
 import os
 import time
 import urllib.request
@@ -45,7 +46,9 @@ state = {
     "strategies": {},
     "telegram": {"status": "NOT_TESTED", "detail": ""},
     "note": "PAPER ONLY. Public market data only. No exchange orders are sent.",
-    "history": {"status": "NOT_STARTED", "symbols": {}, "errors": {}}
+    "history": {"status": "NOT_STARTED", "symbols": {}, "errors": {}},
+    "database": {"status": "NOT_STARTED", "last_saved_utc": None},
+    "last_hourly_report": None
 }
 telegram_last_error = None
 
@@ -59,38 +62,77 @@ def initial_portfolio():
             "signals": 0, "rejected_max_positions": 0, "rejected_insufficient_cash": 0}
 
 
+def db_connect():
+    return psycopg2.connect(
+        os.environ["DATABASE_URL"], connect_timeout=8,
+        options="-c statement_timeout=10000", sslmode="require"
+    )
+
+
+def snapshot():
+    return {
+        "strategies": state["strategies"],
+        "symbols": state["symbols"],
+        "closed_candles": state["closed_candles"],
+        "last_hourly_report": state["last_hourly_report"],
+    }
+
+
 def load_state():
-    global state
-    try:
+    """Database is authoritative. On errors, refuse to run with reset wallets."""
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT state_json FROM paper_trading.bot_state WHERE id = 1")
+            record = cur.fetchone()
+    if record is not None:
+        saved = record[0]
+        if not isinstance(saved, dict) or not isinstance(saved.get("strategies"), dict):
+            raise ValueError("Invalid database portfolio state")
+        for strategy in ("Strategy001", "Strategy002", "Strategy003"):
+            p = saved["strategies"].get(strategy)
+            if not isinstance(p, dict) or not all(k in p for k in ("cash", "positions", "trades", "realized_pnl")):
+                raise ValueError(f"Invalid database portfolio: {strategy}")
+        for name in ("strategies", "symbols", "closed_candles", "last_hourly_report"):
+            if name in saved:
+                state[name] = saved[name]
+        state["database"]["status"] = "RESTORED"
+    else:
+        # First initialization only: recover an existing local file if available.
         path = Path(STATE_PATH)
         if path.exists():
             saved = json.loads(path.read_text(encoding="utf-8"))
             for name in ("strategies", "symbols", "closed_candles"):
                 if name in saved:
                     state[name] = saved[name]
-            for strategy in ("Strategy001", "Strategy002", "Strategy003"):
-                if strategy not in state["strategies"]:
-                    state["strategies"][strategy] = initial_portfolio()
-    except Exception as exc:
-        state["last_error"] = f"state load: {exc}"
-    for strategy in ("Strategy001", "Strategy002", "Strategy003"):
-        state["strategies"].setdefault(strategy, initial_portfolio())
+        for strategy in ("Strategy001", "Strategy002", "Strategy003"):
+            state["strategies"].setdefault(strategy, initial_portfolio())
+        save_state()
+        state["database"]["status"] = "INITIALIZED"
 
 
 def save_state():
+    payload = json.loads(json.dumps(snapshot(), allow_nan=False))
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO paper_trading.bot_state (id, state_json, updated_at)
+                VALUES (1, %s, NOW())
+                ON CONFLICT (id) DO UPDATE SET
+                    state_json = EXCLUDED.state_json,
+                    updated_at = NOW()
+            """, (Json(payload),))
+    state["database"]["status"] = "SAVED"
+    state["database"]["last_saved_utc"] = utc_now()
+    # Local backup is best-effort; database remains authoritative.
     try:
         path = Path(STATE_PATH)
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "strategies": state["strategies"],
-            "symbols": state["symbols"],
-            "closed_candles": state["closed_candles"],
-        }
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
         tmp.replace(path)
-    except Exception as exc:
-        state["last_error"] = f"state save: {exc}"
+    except Exception:
+        pass
+
 
 
 def send_telegram_sync(text):
@@ -333,7 +375,7 @@ async def process_closed_candle(symbol, candle):
         df = build_indicators(rows)
         i = len(df) - 1
         if i < 100:
-            save_state()
+            await asyncio.to_thread(save_state)
             return
 
         for strategy in ("Strategy001", "Strategy002", "Strategy003"):
@@ -385,7 +427,14 @@ async def process_closed_candle(symbol, candle):
                         "ger\u00e7ek emir g\u00f6nderilmez"
                     )
                     asyncio.create_task(asyncio.to_thread(send_telegram_sync, msg))
-        save_state()
+        try:
+            await asyncio.to_thread(save_state)
+        except Exception as exc:
+            state["database"]["status"] = "ERROR"
+            state["last_error"] = f"database save failed: {type(exc).__name__}"
+            state["status"] = "DATABASE_ERROR"
+            state["connected"] = False
+            raise
 
 
 
@@ -467,25 +516,52 @@ async def market_loop():
             raise
         except Exception as exc:
             state["connected"] = False
+            if state["database"]["status"] == "ERROR":
+                state["status"] = "DATABASE_ERROR"
+                return
             state["status"] = "RECONNECTING"
             state["last_error"] = str(exc)[:300]
             state["reconnects"] += 1
             await asyncio.sleep(min(30, 2 + state["reconnects"]))
 
 
+async def hourly_telegram_loop():
+    """UTC clock-hour reports, at most once per hour across restarts."""
+    while True:
+        now = datetime.now(timezone.utc)
+        hour_key = now.strftime("%Y-%m-%dT%H")
+        if now.minute == 0 and state["connected"] and state["last_hourly_report"] != hour_key:
+            lines = ["📊 SAATLİK SANAL İŞLEM RAPORU (UTC)"]
+            for name, p in state["strategies"].items():
+                lines.append(
+                    f"{name}: Nakit {p['cash']:.2f} USDT | "
+                    f"Açık {len(p['positions'])}/{MAX_OPEN} | "
+                    f"Kapanan {len(p['trades'])} | "
+                    f"Gerçekleşen K/Z {p['realized_pnl']:+.2f} USDT"
+                )
+            lines.append("YALNIZCA SANAL İŞLEM — gerçek emir yok")
+            # Mark first to prevent duplicate notifications on rapid retry.
+            state["last_hourly_report"] = hour_key
+            try:
+                await asyncio.to_thread(save_state)
+                await asyncio.to_thread(send_telegram_sync, "\n".join(lines))
+            except Exception as exc:
+                state["last_error"] = f"hourly report: {type(exc).__name__}"
+        await asyncio.sleep(20)
+
+
 @app.on_event("startup")
 async def startup():
-    load_state()
-
-    asyncio.create_task(asyncio.to_thread(
-        send_telegram_sync,
-        "\u2705 Freqtrade sanal i\u015flem motoru ba\u015flat\u0131ld\u0131.\n"
-        "Strategy001/002/003 | BTC/ETH/SOL | 5m\n"
-        "Her strateji: 1.000 USDT; i\u015flem tutar\u0131: 100 USDT; en fazla 5 a\u00e7\u0131k pozisyon.\n"
-        "Yaln\u0131zca sanal i\u015flem \u2014 ger\u00e7ek emir g\u00f6nderilmez."
-    ))
-
+    try:
+        await asyncio.to_thread(load_state)
+    except Exception as exc:
+        state["database"]["status"] = "ERROR"
+        state["status"] = "DATABASE_ERROR"
+        state["last_error"] = f"database startup failed: {type(exc).__name__}"
+        # Do not run market engine on an unknown or missing database state.
+        return
     asyncio.create_task(bootstrap_market())
+    asyncio.create_task(hourly_telegram_loop())
 
 
 @app.get("/")
@@ -511,7 +587,7 @@ async def status():
         "reconnects": state["reconnects"], "paper_only": True, "orders": False,
         "trading": True, "timeframe": TIMEFRAME, "symbols": state["symbols"],
         "history": state["history"],
-        "telegram": state["telegram"], "strategies": {}
+        "telegram": state["telegram"], "database": state["database"], "strategies": {}
     }
     for name, p in state["strategies"].items():
         result["strategies"][name] = {
@@ -529,7 +605,7 @@ async def status():
         }
     result["note"] = ("Paper simulation only; no Binance orders. Indicators are locally implemented. "
                       "Hammer is an approximation, not exact TA-Lib parity. "
-                      "On Render Free, /tmp state is temporary and may be lost on restart.")
+                      "Portfolio persistence uses Supabase; local state is only a backup.")
     return result
 
 
@@ -582,7 +658,7 @@ async def trades(strategy: str):
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "paper_only": True, "orders": False, "connected": state["connected"]}
+    return {"ok": state["connected"] and state["database"]["status"] != "ERROR", "paper_only": True, "orders": False, "connected": state["connected"], "database": state["database"]["status"]}
 
 @app.get("/db-test")
 async def db_test():
