@@ -3,6 +3,7 @@ import json
 import math
 import os
 import time
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -42,7 +43,8 @@ state = {
     "symbols": {},
     "strategies": {},
     "telegram": {"status": "NOT_TESTED", "detail": ""},
-    "note": "PAPER ONLY. Public market data only. No exchange orders are sent."
+    "note": "PAPER ONLY. Public market data only. No exchange orders are sent.",
+    "history": {"status": "NOT_STARTED", "symbols": {}, "errors": {}}
 }
 telegram_last_error = None
 
@@ -99,7 +101,7 @@ def send_telegram_sync(text):
         state["telegram"] = {"status": "NOT_CONFIGURED", "detail": "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID"}
         return False
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    body = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode()
+    body = urllib.parse.urlencode({"chat_id": chat_id, "text": text}, encoding="utf-8").encode("ascii")
     req = urllib.request.Request(url, data=body, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=12) as response:
@@ -296,10 +298,10 @@ def close_position(strategy, pos, price, reason, candle_time):
     }
     portfolio["trades"].append(trade)
     portfolio["positions"].remove(pos)
-    msg = (f"ğŸ“• {strategy} PAPER EXIT\n{pos['symbol']} | {reason}\n"
-           f"Entry {pos['entry_price']:.8g} â†’ Exit {price:.8g}\n"
-           f"Net P/L: {pnl:+.4f} USDT\nRealized total: {portfolio['realized_pnl']:+.4f} USDT\n"
-           "PAPER ONLY â€” no real orders")
+    msg = (f"ğŸ”´ {strategy} SANAL SATIÅ\n{pos['symbol']} | Neden: {reason}\n"
+           f"AlÄ±ÅŸ: {pos['entry_price']:.8g} â†’ SatÄ±ÅŸ: {price:.8g}\n"
+           f"Net kÃ¢r/zarar: {pnl:+.4f} USDT\nToplam gerÃ§ekleÅŸen: {portfolio['realized_pnl']:+.4f} USDT\n"
+           "SADECE SANAL Ä°ÅLEM â€” gerÃ§ek emir gÃ¶nderilmez")
     # Non-blocking-ish: run HTTP send in background thread.
     asyncio.create_task(asyncio.to_thread(send_telegram_sync, msg))
 
@@ -364,12 +366,60 @@ async def process_closed_candle(symbol, candle):
                         "qty": qty, "entry_cost": entry_cost
                     }
                     portfolio["positions"].append(pos)
-                    msg = (f"ğŸŸ¢ {strategy} PAPER ENTRY\n{symbol}\nPrice: {price:.8g}\n"
-                           f"Stake: {STAKE:.2f} USDT | Open: {len(portfolio['positions'])}/{MAX_OPEN}\n"
-                           "PAPER ONLY â€” no real orders")
+                    msg = (f"ğŸŸ¢ {strategy} SANAL ALIÅ\n{symbol}\nFiyat: {price:.8g}\n"
+                           f"Tutar: {STAKE:.2f} USDT | AÃ§Ä±k pozisyon: {len(portfolio['positions'])}/{MAX_OPEN}\n"
+                           "SADECE SANAL Ä°ÅLEM â€” gerÃ§ek emir gÃ¶nderilmez")
                     asyncio.create_task(asyncio.to_thread(send_telegram_sync, msg))
         save_state()
 
+
+
+
+def fetch_historical_candles(symbol, limit=160):
+    import urllib.parse
+    params = urllib.parse.urlencode({"symbol": symbol, "interval": TIMEFRAME, "limit": limit})
+    url = "https://data-api.binance.vision/api/v3/klines?" + params
+    request = urllib.request.Request(url, headers={"User-Agent": "paper-research/1.1"})
+    with urllib.request.urlopen(request, timeout=18) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    now_ms = int(time.time() * 1000)
+    rows = []
+    for k in data:
+        close_ms = int(k[6])
+        if close_ms >= now_ms:
+            continue
+        rows.append({
+            "time": close_ms,
+            "time_iso": datetime.fromtimestamp(close_ms / 1000, tz=timezone.utc).isoformat(),
+            "open": float(k[1]), "high": float(k[2]), "low": float(k[3]),
+            "close": float(k[4]), "volume": float(k[5]),
+        })
+    return rows
+
+
+async def initialize_history():
+    state["history"]["status"] = "LOADING"
+    for symbol in SYMBOLS:
+        try:
+            rows = await asyncio.to_thread(fetch_historical_candles, symbol)
+            if len(rows) < 101:
+                raise ValueError(f"Only {len(rows)} completed historical candles returned")
+            async with lock:
+                candles[symbol] = rows[-1000:]
+                state["symbols"][symbol] = {
+                    "closed_candles": len(rows), "last_close": rows[-1]["close"],
+                    "last_candle_ms": rows[-1]["time"], "candles_in_memory": len(rows),
+                }
+                state["history"]["symbols"][symbol] = len(rows)
+        except Exception as exc:
+            state["history"]["errors"][symbol] = str(exc)[:200]
+    state["history"]["status"] = ("READY" if len(state["history"]["symbols"]) == len(SYMBOLS)
+                                  else "PARTIAL_OR_FAILED")
+
+
+async def bootstrap_market():
+    await initialize_history()
+    await market_loop()
 
 async def market_loop():
     while True:
@@ -414,12 +464,12 @@ async def startup():
     # The status is sent once on boot; missing Telegram settings do not stop market data.
     asyncio.create_task(asyncio.to_thread(
         send_telegram_sync,
-        "âœ… Freqtrade Paper Bot: sanal iÅŸlem motoru baÅŸlatÄ±ldÄ±.\n"
+        "âœ… Freqtrade sanal iÅŸlem motoru baÅŸlatÄ±ldÄ±.\n"
         "Strategy001/002/003 | BTC/ETH/SOL | 5m\n"
-        "1000 USDT per strategy, 100 USDT stake, max 5 open positions each.\n"
-        "PAPER ONLY â€” no real orders."
+        "Her strateji: 1.000 USDT; iÅŸlem tutarÄ±: 100 USDT; en fazla 5 aÃ§Ä±k pozisyon.\n"
+        "YalnÄ±zca sanal iÅŸlem â€” gerÃ§ek emir gÃ¶nderilmez."
     ))
-    asyncio.create_task(market_loop())
+    asyncio.create_task(bootstrap_market())
 
 
 @app.get("/")
@@ -444,6 +494,7 @@ async def status():
         "messages": state["messages"], "closed_candles": state["closed_candles"],
         "reconnects": state["reconnects"], "paper_only": True, "orders": False,
         "trading": True, "timeframe": TIMEFRAME, "symbols": state["symbols"],
+        "history": state["history"],
         "telegram": state["telegram"], "strategies": {}
     }
     for name, p in state["strategies"].items():
@@ -462,22 +513,22 @@ async def status():
         }
     result["note"] = ("Paper simulation only; no Binance orders. Indicators are locally implemented. "
                       "Hammer is an approximation, not exact TA-Lib parity. "
-                      "Use a Render persistent disk mounted at /var/data to preserve state across restarts.")
+                      "On Render Free, /tmp state is temporary and may be lost on restart.")
     return result
 
 
 @app.get("/telegram-test")
 async def telegram_test():
-    ok = await asyncio.to_thread(send_telegram_sync, "âœ… Telegram test from paper engine. PAPER ONLY â€” no real orders.")
+    ok = await asyncio.to_thread(send_telegram_sync, "âœ… Telegram TÃ¼rkÃ§e karakter testi: Ã§ ÄŸ Ä± Ä° Ã¶ ÅŸ Ã¼ â€” yalnÄ±zca sanal iÅŸlem.")
     return {"ok": ok, "telegram": state["telegram"]}
 
 
 @app.get("/daily")
 async def daily():
-    lines = ["ğŸ“Š PAPER DAILY SUMMARY"]
+    lines = ["ğŸ“Š GÃœNLÃœK SANAL Ä°ÅLEM Ã–ZETÄ°"]
     for name, p in state["strategies"].items():
-        lines.append(f"{name}: realized {p['realized_pnl']:+.2f} USDT, open {len(p['positions'])}/{MAX_OPEN}, closed {len(p['trades'])}")
-    lines.append("PAPER ONLY â€” no real orders")
+        lines.append(f"{name}: gerÃ§ekleÅŸen kÃ¢r/zarar {p['realized_pnl']:+.2f} USDT, aÃ§Ä±k {len(p['positions'])}/{MAX_OPEN}, kapanan {len(p['trades'])}")
+    lines.append("SADECE SANAL Ä°ÅLEM â€” gerÃ§ek emir gÃ¶nderilmez")
     ok = await asyncio.to_thread(send_telegram_sync, "\n".join(lines))
     return {"ok": ok, "telegram": state["telegram"], "summary": lines}
 
