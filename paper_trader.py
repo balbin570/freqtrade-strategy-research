@@ -1,6 +1,7 @@
 import asyncio
 import json
 import math
+import psycopg2
 import os
 import time
 import urllib.request
