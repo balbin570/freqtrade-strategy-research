@@ -1,2 +1,6 @@
-freqtrade
+fastapi
+uvicorn
+websockets
+numpy
+pandas
 psycopg2-binary>=2.9,<3
