@@ -298,10 +298,17 @@ def close_position(strategy, pos, price, reason, candle_time):
     }
     portfolio["trades"].append(trade)
     portfolio["positions"].remove(pos)
-    msg = (f"ğŸ”´ {strategy} SANAL SATIÅ\n{pos['symbol']} | Neden: {reason}\n"
-           f"AlÄ±ÅŸ: {pos['entry_price']:.8g} â†’ SatÄ±ÅŸ: {price:.8g}\n"
-           f"Net kÃ¢r/zarar: {pnl:+.4f} USDT\nToplam gerÃ§ekleÅŸen: {portfolio['realized_pnl']:+.4f} USDT\n"
-           "SADECE SANAL Ä°ÅLEM â€” gerÃ§ek emir gÃ¶nderilmez")
+    msg = (
+        f"\U0001F534 {strategy} SANAL SATI\u015e\n"
+        f"{pos['symbol']} | Neden: {reason}\n"
+        f"Al\u0131\u015f: {pos['entry_price']:.8g} "
+        f"\u2192 Sat\u0131\u015f: {price:.8g}\n"
+        f"Net k\u00e2r/zarar: {pnl:+.4f} USDT\n"
+        f"Toplam ger\u00e7ekle\u015fen: "
+        f"{portfolio['realized_pnl']:+.4f} USDT\n"
+        "SADECE SANAL \u0130\u015eLEM \u2014 "
+        "ger\u00e7ek emir g\u00f6nderilmez"
+    )
     # Non-blocking-ish: run HTTP send in background thread.
     asyncio.create_task(asyncio.to_thread(send_telegram_sync, msg))
 
