@@ -583,3 +583,32 @@ async def trades(strategy: str):
 @app.get("/health")
 async def health():
     return {"ok": True, "paper_only": True, "orders": False, "connected": state["connected"]}
+
+@app.get("/db-test")
+async def db_test():
+    def check_connection():
+        conn = psycopg2.connect(
+            os.environ["DATABASE_URL"],
+            connect_timeout=8,
+            sslmode="require"
+        )
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT to_regclass('paper_trading.bot_state')"
+                )
+                return cur.fetchone()[0] is not None
+        finally:
+            conn.close()
+
+    try:
+        table_exists = await asyncio.to_thread(check_connection)
+        return {
+            "database_connected": True,
+            "table_exists": table_exists
+        }
+    except Exception as exc:
+        return {
+            "database_connected": False,
+            "error_type": type(exc).__name__
+        }
