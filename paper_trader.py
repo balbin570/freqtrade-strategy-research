@@ -398,6 +398,11 @@ async def process_closed_candle(symbol, candle):
                 elif exit_signal(strategy, df, i) and (not pos or candle["close"] > pos["entry_price"]):
                     close_position(strategy, pos, candle["close"], "exit_signal", candle["time_iso"])
 
+            # Strategy002 and Strategy003: no new entries; existing positions still exit normally.
+            # Preserve their Supabase portfolios and historical trades.
+            if strategy != "Strategy001":
+                continue
+
             # One entry per signal candle per strategy/symbol. Same symbol may have multiple positions.
             if entry_signal(strategy, df, i):
                 portfolio["signals"] += 1
