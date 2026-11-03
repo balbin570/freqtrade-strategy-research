@@ -20,7 +20,19 @@ async def run():
                 print('Another scheduled run is active; skipping.')
                 return
         try:
+            # Require an existing Supabase portfolio before loading.
+            with guard.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM paper_trading.bot_state WHERE id = 1"
+                )
+                if cur.fetchone() is None:
+                    raise RuntimeError("Supabase portfolio missing; refusing initialization")
+                    
             await asyncio.to_thread(bot.load_state)
+            
+            if bot.state["database"]["status"] == "INITIALIZED":
+                raise RuntimeError("Existing Supabase state missing; refusing to start")
+                
             # Existing state is authoritative. Never initialize/replay blindly.
             cursors = {}
             for symbol in bot.SYMBOLS:
