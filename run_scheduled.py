@@ -1,5 +1,6 @@
 """One-shot Binance Vision paper trader for GitHub Actions; never places orders."""
 import asyncio
+from contextlib import closing
 import os
 import sys
 import time
@@ -12,8 +13,7 @@ async def run():
     if not os.getenv('DATABASE_URL'):
         raise RuntimeError('DATABASE_URL is required')
     # Session-level lock, held until all writes are complete; protects overlapping jobs.
-    with psycopg2.connect(os.environ['DATABASE_URL'], sslmode='require', connect_timeout=8) as guard:
-        guard.autocommit = True
+    with closing(psycopg2.connect(os.environ['DATABASE_URL'], sslmode='require', connect_timeout=8)) as guard:
         with guard.cursor() as cur:
             cur.execute('SELECT pg_try_advisory_lock(%s)', (LOCK_KEY,))
             if not cur.fetchone()[0]:
