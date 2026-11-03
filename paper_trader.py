@@ -116,7 +116,7 @@ def save_state():
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO paper_trading.bot_state (id, state_json, updated_at)
-                VALUES (1, %s, NOW())
+                VALUES (1, %s, NOW()) 
                 ON CONFLICT (id) DO UPDATE SET
                     state_json = EXCLUDED.state_json,
                     updated_at = NOW()
