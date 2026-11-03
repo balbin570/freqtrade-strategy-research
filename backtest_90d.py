@@ -84,9 +84,15 @@ def run(frames, stop):
     pnls=[x['net_pnl_usdt'] for x in trades]; wins=sum(p>0 for p in pnls); gain=sum(p for p in pnls if p>0); loss=-sum(p for p in pnls if p<0)
     return dict(stop_pct=round(stop*100),closed_trades=len(trades),open_positions=len(positions),signals=signals,rejected_max_positions=rejected_max,rejected_insufficient_cash=rejected_cash,win_rate_pct=round(wins/len(pnls)*100,2) if pnls else None,profit_factor=round(gain/loss,4) if loss else None,realized_pnl_usdt=round(sum(pnls),4),final_equity_usdt=round(equity,4),total_return_pct=round((equity/1000-1)*100,4),max_drawdown_pct=round(drawdown*100,4)),trades
 
+
 def main():
-    now=datetime.now(timezone.utc); end=now.replace(minute=now.minute//5*5,second=0,microsecond=0)
-    start=end-timedelta(days=90); warmup=start-timedelta(days=7)
+    now = datetime.now(timezone.utc)
+    # Binance Vision günlük arşivlerinin yayımlanma gecikmesi için 3 gün pay bırak.
+    end = (now - timedelta(days=3)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    start = end - timedelta(days=90)
+    warmup = start - timedelta(days=7)
     print('Evaluation UTC:',start.isoformat(),'to',end.isoformat(),flush=True)
     frames={}
     for symbol in SYMBOLS:
