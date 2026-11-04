@@ -1,0 +1,25 @@
+name: Strategy001 A2 ADX Comparison
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install numpy pandas requests
+      - name: Run A2 ADX comparison
+        run: python backtest_a2_adx_90d.py
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy001-a2-adx-results
+          path: a2_adx_results/
+          if-no-files-found: warn
