@@ -32,5 +32,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: altcoins-top5-comparison-results
-          path: backtest_results_top5/
+          path: backtest_results_top5_compare/
           if-no-files-found: warn
