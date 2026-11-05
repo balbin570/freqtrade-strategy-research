@@ -1,0 +1,36 @@
+
+name: A2 BTC 1H Independent5 Backtest
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy
+
+      - name: Run independent altcoin backtest
+        run: python backtest_a2_btc_1h_independent5.py
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a2-btc-1h-independent5-results
+          path: backtest_results_a2_btc_1h_independent5/
+          if-no-files-found: error
