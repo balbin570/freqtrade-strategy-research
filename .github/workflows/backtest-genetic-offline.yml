@@ -1,0 +1,26 @@
+name: Genetic 180D Offline Research
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download historical Binance Vision candles
+        run: python download_genetic_180d.py
+      - name: Simulate without Binance trading API
+        run: |
+          docker run --rm --entrypoint python \
+            -v "${{ github.workspace }}:/freqtrade/research" \
+            freqtradeorg/freqtrade:stable \
+            /freqtrade/research/backtest_genetic_180d.py
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: genetic-offline-results
+          path: genetic_180d_results/
+          if-no-files-found: warn
