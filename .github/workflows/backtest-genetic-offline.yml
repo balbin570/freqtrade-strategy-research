@@ -13,7 +13,7 @@ jobs:
         run: python download_genetic_180d.py
       - name: Simulate without Binance trading API
         run: |
-          docker run --rm --entrypoint python \
+          docker run --rm --user "$(id -u):$(id -g)" --entrypoint python \
             -v "${{ github.workspace }}:/freqtrade/research" \
             freqtradeorg/freqtrade:stable \
             /freqtrade/research/backtest_genetic_180d.py
