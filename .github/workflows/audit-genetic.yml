@@ -1,0 +1,43 @@
+name: GeneticEngineV1Causal - Safe Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check strategy file
+        run: |
+          test -f GeneticEngineV1Causal.py
+          python -m py_compile GeneticEngineV1Causal.py
+          echo 'Python syntax: OK'
+
+      - name: Freqtrade strategy discovery (no orders, no backtest)
+        run: |
+          mkdir -p user_data
+          docker run --rm \
+            -v "${{ github.workspace }}:/freqtrade/research:ro" \
+            -v "${{ github.workspace }}/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable \
+            list-strategies \
+            --userdir /freqtrade/user_data \
+            --strategy-path /freqtrade/research \
+            --config /freqtrade/research/audit-config.json \
+            --one-column | tee strategy-audit.log
+          grep -Fx 'GeneticEngineV1Causal' strategy-audit.log
+
+      - name: Upload diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: genetic-strategy-audit
+          path: strategy-audit.log
+          if-no-files-found: warn
