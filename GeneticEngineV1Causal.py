@@ -36,7 +36,7 @@ Usage:
 # Sinyal üretimi: populate_entry_trend() ve populate_exit_trend()
 # ========================================
 from freqtrade.strategy import IStrategy, CategoricalParameter, DecimalParameter
-from pandas import DataFrame
+from pandas import DataFrame, Series
 
 import talib.abstract as ta
 import freqtrade.vendor.qtpylib.indicators as qtpylib
@@ -134,11 +134,12 @@ if len(operators) == 1:
 
 
 def normalize(df):
-    """Causal expanding min-max scaling: only current and past observations."""
-    min_val = df.expanding(min_periods=1).min()
-    max_val = df.expanding(min_periods=1).max()
+    """Causal expanding min-max scaling, accepting Series and ndarray."""
+    values = df if isinstance(df, Series) else Series(np.asarray(df).reshape(-1))
+    min_val = values.expanding(min_periods=1).min()
+    max_val = values.expanding(min_periods=1).max()
     diff = (max_val - min_val).replace(0, np.nan)
-    return ((df - min_val) / diff).fillna(0.0)
+    return ((values - min_val) / diff).fillna(0.0)
 
 
 
