@@ -1,0 +1,14 @@
+{
+  "dry_run": true,
+  "stake_currency": "USDT",
+  "stake_amount": 100,
+  "max_open_trades": 1,
+  "exchange": {
+    "name": "binance",
+    "key": "",
+    "secret": "",
+    "pair_whitelist": ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"],
+    "pair_blacklist": []
+  },
+  "pairlists": [{"method": "StaticPairList"}]
+}
