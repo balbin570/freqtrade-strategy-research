@@ -1,0 +1,44 @@
+name: GeneticEngineV1Causal 180d Backtest
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download and validate Binance Vision data
+        run: python download_genetic_180d.py
+      - name: Run Freqtrade backtest (no live orders)
+        run: |
+          set -o pipefail
+          mkdir -p user_data/backtest_results
+          docker run --rm \
+            -v "${{ github.workspace }}:/freqtrade/research:ro" \
+            -v "${{ github.workspace }}/user_data:/freqtrade/user_data" \
+            freqtradeorg/freqtrade:stable backtesting \
+            --userdir /freqtrade/user_data \
+            --config /freqtrade/research/audit-config.json \
+            --strategy-path /freqtrade/research \
+            --strategy GeneticEngineV1Causal \
+            --datadir /freqtrade/user_data/data/binance \
+            --timeframe 5m \
+            --timerange 20260511-20261106 \
+            --fee 0.0015 \
+            --dry-run-wallet 1000 \
+            --export trades \
+            --export-filename /freqtrade/user_data/backtest_results/genetic-180d.json \
+            2>&1 | tee user_data/backtest_results/backtest.log
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: genetic-180d-results
+          path: user_data/backtest_results/
+          if-no-files-found: warn
