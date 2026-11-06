@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 PAIRS = ('BTC', 'ETH', 'SOL', 'BNB', 'XRP')
-START = datetime(2026, 5, 1, tzinfo=timezone.utc)  # warmup included
+START = datetime(2026, 4, 30, tzinfo=timezone.utc)  # full 10-day warmup
 END = datetime(2026, 11, 6, tzinfo=timezone.utc)  # exclusive
 OUT = Path('user_data/data/binance')
 OUT.mkdir(parents=True, exist_ok=True)
@@ -31,6 +31,12 @@ def read_zip(blob):
 for pair in PAIRS:
     symbol = pair + 'USDT'
     rows = {}
+    # One additional warmup day is required by the simulator.
+    april_url = (f'https://data.binance.vision/data/spot/daily/klines/'
+                 f'{symbol}/5m/{symbol}-5m-2026-04-30.zip')
+    print('GET', april_url, flush=True)
+    for row in read_zip(fetch(april_url)):
+        rows[row[0]] = row
     for month in range(5, 11):
         filename = f'{symbol}-5m-2026-{month:02d}.zip'
         url = f'https://data.binance.vision/data/spot/monthly/klines/{symbol}/5m/{filename}'
