@@ -11,9 +11,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Download historical Binance Vision candles
         run: python download_genetic_180d.py
+      - name: Prepare writable output directory
+        run: |
+          mkdir -p genetic_180d_results
+          chmod 777 genetic_180d_results
       - name: Simulate without Binance trading API
         run: |
-          docker run --rm --user "$(id -u):$(id -g)" --entrypoint python \
+          docker run --rm --entrypoint python \
             -v "${{ github.workspace }}:/freqtrade/research" \
             freqtradeorg/freqtrade:stable \
             /freqtrade/research/backtest_genetic_180d.py
